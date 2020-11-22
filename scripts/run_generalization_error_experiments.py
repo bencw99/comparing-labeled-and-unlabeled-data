@@ -8,7 +8,7 @@ import argparse
 
 from models import FlyingSquid, MLE
 from distribution import create_random_distribution
-from utils import cross_entropy
+from utils import cross_entropy, run_experiment, get_synthetic_and_loss_fns
 
 config = {
     "m": [10],
@@ -51,6 +51,9 @@ if __name__ == "__main__":
                 continue
             if str(params) in existing_results:
                 continue
-            loss = run_experiment(**params)
+            distribution = create_random_distribution(m, low_a, high_a, d, epsilon, seed=123)
+            sample_fn, loss_fn = get_synthetic_fns(distribution)
+            model = MLE() if mode == "labeled" else FlyingSquid(mode)
+            loss = run_experiment(sample_fn, loss_fn, model, distribution.class_balance, n)
             results[str(params)].append(loss)
         pickle.dump(results, open(save_path, "wb"))

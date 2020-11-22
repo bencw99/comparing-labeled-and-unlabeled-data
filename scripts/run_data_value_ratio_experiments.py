@@ -6,16 +6,7 @@ import argparse
 
 from models import MLE, FlyingSquid
 from distribution import create_random_distribution
-from utils import cross_entropy, get_budgets
-
-def _run_sweep(distribution, model, sweep):
-    ns = get_budgets(sweep)
-    losses = np.zeros(ns.shape)
-    for i, n in enumerate(ns):
-        L, Y = distribution.sample(n)
-        model.train(L, Y, distribution.class_balance)
-        losses[i] = distribution.expectation(lambda L, Y: cross_entropy(model.predict_probs(L), Y))
-    return losses
+from utils import run_sweep, cross_entropy, get_synthetic_fns
 
 UNLABELED_SWEEP = [(100, 900, 100), (1000, 10000, 1000)]
 LABELED_SWEEP = [(10, 99, 1), (100, 998, 2), (1000, 5000, 10)]
@@ -33,6 +24,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     distribution = create_random_distribution(args.m, args.low_accuracy, args.high_accuracy, args.d, epsilon=args.epsilon, seed=123)
+    sample_fn, loss_fn = get_synthetic_fns(distribution)
 
     unlabeled_models = {agg: FlyingSquid(agg=agg) for agg in AGGS}
     labeled_model = MLE()
@@ -43,8 +35,8 @@ if __name__ == "__main__":
     labeled_losses = []
     for trial in tqdm(range(args.num_trials)):
         for agg in AGGS:
-            unlabeled_losses[agg].append(_run_sweep(distribution, unlabeled_models[agg], UNLABELED_SWEEP))
-        labeled_losses.append(_run_sweep(distribution, labeled_model, LABELED_SWEEP))
+            unlabeled_losses[agg].append(run_sweep(sample_fn, loss_fn, unlabeled_model[agg], distribution.class_balance, UNLABELED_SWEEP))
+        labeled_losses.append(run_sweep(sample_fn, loss_fn, labeled_model, distribution.class_balance, LABELED_SWEEP))
 
         for agg in AGGS:
             np.save(args.save_path / f"unlabeled_losses_{agg}.npy", unlabeled_losses[agg])

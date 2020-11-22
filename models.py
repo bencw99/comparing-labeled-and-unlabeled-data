@@ -4,7 +4,7 @@ from scipy.optimize import fsolve
 from abc import ABC, abstractmethod
 
 from distribution import Distribution, CCDistribution
-from utils import NEGATIVE, POSITIVE
+from utils import NEGATIVE, POSITIVE, green_combined
 
 def _get_agg(agg_name):
     if agg_name == "mean":
@@ -70,28 +70,24 @@ class CCFlyingSquid(CCModelBase):
             ]
 
         def _fast_solve_triplet(i, j, k):
-            first_root = fsolve(_f, [1.0, 1.0, 1.0])
-            if np.allclose(_f(first_root), [0.0, 0.0, 0.0]):
-                second_root = fsolve(_f, np.random.uniform(size=3))
+            first_root = fsolve(_triplet_equations, [1.0, 1.0, 1.0])
+            if np.allclose(_triplet_equations(first_root), [0.0, 0.0, 0.0]):
+                second_root = fsolve(_triplet_equations, np.random.uniform(size=3))
                 attempts = 0
                 while np.allclose(second_root, first_root):
-                    second_root = fsolve(_f, np.random.uniform(size=3))
+                    second_root = fsolve(_triplet_equations, np.random.uniform(size=3))
                     attempts += 1
                     if attempts > self.fast_max_attempts:
                         break
                 return (max(float(first_root[i]), float(second_root[i])) for i in range(3))
 
-        def _solve_triplet(i, j, k):
-            alpha, beta, gamma = sympy.symbols("alpha beta gamma")
-            solutions = sympy.solve([
-                    _equation(i, j, alpha, beta),
-                    _equation(j, k, beta, gamma),
-                    _equation(i, k, alpha, gamma),
-                ], alpha, beta, gamma
-            )
+        def _full_solve_triplet(i, j, k):
+            p = sympy.symbols("alpha beta gamma")
+            solutions = sympy.solve(_triplet_equations(p), *p)
             if isinstance(solutions[0][0], sympy.core.numbers.Float):
                 return (max(float(solutions[0][i]), float(solutions[1][i])) for i in range(3))
         
+        _solve_triplet = _fast_solve_triplet if self.fast else _full_solve_triplet
         alphas = [[] for i in range(M)]
         for i in range(M):
             for j in range(i + 1, M):
@@ -123,13 +119,13 @@ class CCMLE(CCModelBase):
         )
 
 class CCCombined(CCModelBase):
-    def __init__(self, flying_squid, mle, alpha):
-        positive_accuracies = flying_squid.distribution.positive_accuracies * (1 - alpha) + \
-            mle.distribution.positive_accuracies * alpha
-        negative_accuracies = flying_squid.distribution.negative_accuracies * (1 - alpha) + \
-            mle.distribution.negative_accuracies * alpha
-        class_balance = flying_squid.distribution.class_balance * (1 - alpha) + \
-            mle.distribution.class_balance * alpha
+    def __init__(self, flying_squid, mle, weight):
+        positive_accuracies = flying_squid.distribution.positive_accuracies * (1 - weight) + \
+            mle.distribution.positive_accuracies * weight
+        negative_accuracies = flying_squid.distribution.negative_accuracies * (1 - weight) + \
+            mle.distribution.negative_accuracies * weight
+        class_balance = flying_squid.distribution.class_balance * (1 - weight) + \
+            mle.distribution.class_balance * weight
         self.distribution = CCDistribution(
             positive_accuracies,
             negative_accuracies,
@@ -141,15 +137,10 @@ class CCCombined(CCModelBase):
 
 class CCGreen(CCCombined):
     def __init__(self, flying_squid, mle, n_l, R=None):
-
         unlabeled_accuracies = flying_squid.learned_accuracies()
         labeled_accuracies = mle.learned_accuracies()
-        temp = labeled_accuracies - unlabeled_accuracies
-
-        denom = np.sum((temp ** 2) / (labeled_accuracies * (1 - labeled_accuracies) / n_l))
-        weight = np.maximum(1 - R / denom, 0)
-
-        super().__init__(flying_squid, mle, weight)
+        _, weight = green_combined(labeled_accuracies, unlabeled_accuracies, n_l, R=R)
+        super().__init__(flying_squid, mle, 1 - weight)
 
 class SimpleModelBase(ModelBase, ABC):
     def __init__(self):

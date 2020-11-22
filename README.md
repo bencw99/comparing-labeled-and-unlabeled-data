@@ -48,3 +48,17 @@ do
     done
 done
 ```
+
+## IMDB Real-World Case Study
+
+In the real-world case study we explore how misspecification manifests in real-world datasets, and the difference between learning from labeled and unlabeled data in these settings. To produce the results for the IMDB notebook, run the following commands.
+
+```
+python -m scripts.generate_imdb_data;
+python -m scripts.run_real_experiments --dataset=imdb;
+python -m scripts.run_real_combined_experiments --dataset=imdb;
+```
+
+## References
+
+[1] Andrew L. Maas, Raymond E. Daly, Peter T. Pham, Dan Huang, Andrew Y. Ng, and Christopher Potts. (2011). Learning Word Vectors for Sentiment Analysis. The 49th Annual Meeting of the Association for Computational Linguistics (ACL 2011).
