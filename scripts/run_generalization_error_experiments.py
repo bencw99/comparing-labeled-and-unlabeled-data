@@ -8,7 +8,7 @@ import argparse
 
 from models import FlyingSquid, MLE
 from distribution import create_random_distribution
-from utils import cross_entropy, run_experiment, get_synthetic_and_loss_fns
+from utils import cross_entropy, run_experiment, get_synthetic_fns
 
 config = {
     "m": [10],
